@@ -57,6 +57,7 @@ network:
 If you build the CoreDNS server before the other servers, the automation will automatically create A records. Alternatively, you can manage DNS resolution manually by editing your local /etc/hosts file.
 
 ### 4. Running the Plays
+Included below are some examples of arguments you can pass to customize the behavior of the playbooks. For a full list of all available arguments, please refer to the individual playbooks.
 
 1. **Set up the KVM Server**:
    Run the following play to install and configure the KVM server:
@@ -73,18 +74,33 @@ If you build the CoreDNS server before the other servers, the automation will au
    ```bash
    ansible-playbook plays/build_kubernetes_cluster.yaml -i inv/hosts.yaml
    ```
-4. **Build Kubernetes Worker**
+5. **Build Kubernetes Control Plane Server**
+   ```
+   ansible-playbook plays/build_k8s_control_plane_server.yaml -i inv/hosts.yaml
+   Arguments:
+   - --extra-vars "init_master=false": Don't init the control plane to allow manual init. Default(true)
+   ```
+4. **Build Kubernetes Worker Server**
    ```
    ansible-playbook plays/build_k8s_worker_server.yaml -i inv/hosts.yaml
+   Arguments:
+   - --extra-vars "join_cluster=false": Don't join cluster to allow manual join. Default(true)
    ```
 5. **Build Ubuntu Server**
    ```
    Run the following play to launch an Ubuntu server with nothing installed. It will configure your networking and ssh key.
    ansible-playbook plays/create_vms.yaml -i inv/hosts.yaml
+   Arguments:
+   - --extra-vars "use_backing_file=false": Create a stand alone qcow2 disk image not linked to a backing file. Default(true)
+   - --extra-vars "disk_size=20": Allocate 20GB disk image. Default(10)
+   - --extra-vars "ram_size=4096": Allocate 4GB of RAM. Default(1024)
+   - --extra-vars "cpu_count=4": Allocate 4C CPU's. Default(2)
    ```
 6. **Destroy Ubuntu Server**
    ```bash
-      ansible-playbook plays/delete_vms.yaml -i inv/hosts.yaml
+    ansible-playbook plays/delete_vms.yaml -i inv/hosts.yaml
+    Arguments:
+    - --extra-vars "delete_backing_file=true": Deletes the master image if no other VMs are using it. The next VM creation will pull the latest image. (Default: false)
    ```
 
 ## 5. Kubernetes
