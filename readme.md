@@ -15,7 +15,7 @@ The playbook currently handles the following tasks:
 - CoreDNS Deployment: Installs and configures CoreDNS as a DNS server for the Kubernetes cluster.
 - DNS Record Management: Provides functionality for creating, updating, and deleting DNS records to manage domain names within the cluster.
 
-This project is designed to be extendable, with the ability to automate the build and configuration of any type of server. Future enhancements, such as a PostgreSQL "pipeline," are planned to further extend its capabilities, making it a flexible solution for a wide variety of infrastructure automation needs.
+This project is designed to be extendable, with the ability to automate the build and configuration of any type of server. Future enhancements, such as a PostgreSQL pipeline, are planned to further extend its capabilities, making it a flexible solution for a wide variety of infrastructure automation needs.
 
 ---
 
@@ -89,7 +89,7 @@ If you build the CoreDNS server before the other servers, the automation will au
 
 ## 5. Kubernetes
 
-The Nginx ingress controller is installed and configured to handle incoming HTTP/HTTPS traffic on 80 and 443 as a node port service. You just need to ensure your traffic is routed correctly to any node in the cluster and it will get routed over the pod network to nginx. If you don't want to run a DNS server, a simple method is to modify your local /etc/hosts file to resolve the ingress host to the IP of your Kubernetes node. For example:
+The Nginx ingress controller is installed and configured to handle incoming HTTP/HTTPS traffic on ports 80 and 443 as a NodePort service. To route traffic correctly, ensure it's directed to any node in the cluster, and kube-proxy will forward it to the appropriate backend pod within the cluster. If you prefer not to run a DNS server, a simple alternative is to modify your local /etc/hosts file to resolve the ingress host to the IP address of one of your Kubernetes nodes. For example:
 
 ##### Hosts file example:
 
