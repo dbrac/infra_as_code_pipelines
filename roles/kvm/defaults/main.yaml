@@ -1,0 +1,30 @@
+# VM build config
+cloud_image: "ubuntu-22.04-server-cloudimg-amd64"
+use_backing_file: true # if false, creates a stand alone qcow2
+delete_backing_file: false # if true, delete_vm.yml will delete the base backing file if no VM's are using it.
+cpu_count: 2
+ram_size: 1024  # 4GB
+disk_size: 10  # 20GB
+
+# KVM server config
+kvm_packages:
+  - qemu-kvm
+  - libvirt-clients
+  - libvirt-daemon-system
+  - bridge-utils
+  - cloud-utils
+
+vm_path: "/var/lib/libvirt/images"
+base_image_path: "{{ vm_path }}/base"
+
+# network-config.yaml
+network_dhcp4: false
+network_dhcp6: false
+network_subnet_mask: 24
+network_gateway: "192.168.1.1"
+network_nameservers: ["8.8.8.8", "8.8.4.4"]
+
+# user-config.yaml
+ubuntu_user: "ubuntu"
+ubuntu_pass: "changeme"  # Change this or override it in vars
+

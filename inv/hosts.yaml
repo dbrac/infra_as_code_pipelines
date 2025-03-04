@@ -1,0 +1,45 @@
+all:
+  vars:
+    # Set default values for all hosts in this inventory
+    ram_size: "1024"  # Default 2GB RAM
+    cpu_count: "2"     # Default 2 vCPU
+    disk_size: "10"   # Default 15GB disk (will be a thinlinked clone by default)
+
+  children:
+    dns:
+      hosts:
+        ns01:
+          ansible_host: "192.168.1.254"
+
+    masters:
+      vars:
+        ram_size: "4096"
+      hosts:
+        c1-cp1:
+          ansible_host: "192.168.1.202"
+
+    workers:
+      vars:
+        ram_size: "2048"
+      hosts:
+        c1-node1: 
+          ansible_host: "192.168.1.203"
+        c1-node2: 
+          ansible_host: "192.168.1.204"
+        c1-node3: 
+          ansible_host: "192.168.1.205"
+
+    kvmhost:
+      hosts:
+        kvm01:
+          ansible_host: "192.168.1.201"
+
+    test:
+      hosts:
+        test01:
+          ansible_host: "192.168.1.211"
+        test02:
+          ansible_host: "192.168.1.212"
+        test03:
+          ansible_host: "192.168.1.213"
+

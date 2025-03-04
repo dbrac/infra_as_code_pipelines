@@ -1,0 +1,5 @@
+# runc_version: "1.2.4"
+# containerd_version: "1.7.25"
+# k8s_major: 1
+# k8s_minor: 30
+# k8s_patch: 9

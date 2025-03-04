@@ -1,0 +1,25 @@
+
+apiVersion: {{ init_configuration_api }}
+kind: InitConfiguration
+---
+apiVersion: {{ cluster_configuration_api }}
+kind: ClusterConfiguration
+kubernetesVersion: v{{ k8s_major }}.{{ k8s_minor }}.{{ k8s_patch }}
+controlPlaneEndpoint: {{ api_vip }}:6443
+
+apiServer:
+  timeoutForControlPlane: 3m0s
+  extraArgs:
+    audit-log-maxage: "{{ audit_log_maxage }}"
+    audit-log-maxbackup: "{{ audit_log_maxbackup }}"
+    audit-log-maxsize: "{{ audit_log_maxsize }}"
+    enable-admission-plugins: AlwaysPullImages
+    service-node-port-range: "80-32767"
+
+networking:
+  podSubnet: {{ pod_cidr }}
+  serviceSubnet: {{ service_cidr }}
+---
+apiVersion: {{ kubelet_configuration_api }}
+kind: KubeletConfiguration
+maxPods: 100

@@ -1,0 +1,57 @@
+# description: Creates virtual machines on a KVM host.
+# usage: 
+#   - ansible-playbook create_vms.yaml -i inventory.yaml
+#   - ansible-playbook create_vms.yaml -i inventory.yaml -l <inventory_group>
+#   - ansible-playbook create_vms.yaml -i inventory.yaml -l <inventory_host>
+#   - ansible-playbook create_vms.yaml -i inventory.yaml -l group -e "use_backing_file=false"
+#   - ansible-playbook create_vms.yaml -i inventory.yaml -l group -e "kvmhost=x.x.x.x"
+#
+# variables:
+#   - use_backing_file: (bool) Whether to use a backing file for VM disks. False creates a standalone qcow2 disk image not tied to a shared backign file. 
+#   - kvmhost: KVM server where VM's will be created
+#
+# prerequisites:
+#   - KMV role
+#   - Functioning KVM server. There is an install_kvm task in the kvm role.
+
+- name: 
+  hosts: all  # Allows limiting with -l
+  become: yes
+  gather_facts: no
+  vars:
+    use_backing_file: true
+    kvmhost: "{{ hostvars['kvm01']['ansible_host'] }}"
+
+  pre_tasks:
+    - name: Warn if no limit (-l) specified
+      pause:
+        prompt: "WARNING: No -l specified. This will target the entire inventory. Press ENTER to continue or Ctrl+C to cancel."
+      when: ansible_limit is not defined
+
+  tasks:
+    - name: Create VMs on KVM host
+      # include role module can't delegate but we can delegate an entire block to the kvmhost. all the tasks in the role must target the kvm host.
+      delegate_to: "{{ kvmhost }}"
+      block:
+        - name: Include KVM role to create VMs
+          include_role:
+            name: kvm
+            tasks_from: create_vm
+          vars:
+            disk_size: "{{ hostvars[hostname].disk_size }}"
+            ram_size: "{{ hostvars[hostname].ram_size }}"
+            cpu_count: "{{ hostvars[hostname].cpu_count }}"
+            hostname: "{{ inventory_hostname }}"
+   
+    - name: Wait for VM's to start 
+      include_role:
+        name: kvm
+        tasks_from: wait_for_connection
+
+    - name: Install and configure CoreDNS
+      include_role:
+        name: coredns
+        tasks_from: install
+      vars:
+        hostname: "{{ inventory_hostname }}"
+        

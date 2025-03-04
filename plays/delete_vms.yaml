@@ -1,0 +1,57 @@
+# description: Deletes virtual machines on a KVM host.
+#
+# usage: 
+#   - ansible-playbook delete_vms.yaml -i inventory.yaml -l <inventory_group>
+#   - ansible-playbook delete_vms.yaml -i inventory.yaml -l <inventory_host>
+#   - ansible-playbook delete_vms.yaml -i inventory.yaml -l group -e "delete_backing_file=true"
+#   - ansible-playbook delete_vms.yaml -i inventory.yaml -l group -e "kvmhost=x.x.x.x"
+#
+# variables:
+#   - use_backing_file: (bool) Whether to use a backing file for VM disks. False creates a standalone qcow2 disk image not tied to a shared backign file. 
+#   - kvmhost: KVM server where VM's will be created
+#
+# prerequisites:
+#   - KMV role
+#   - Functioning KVM server. There is an install_kvm task in the kvm role.
+
+- name: Destroy VMs
+  hosts: all
+  become: yes
+  gather_facts: no
+  vars:
+    kvmhost: "{{ hostvars['kvm01']['ansible_host'] }}"
+    delete_backing_file: false
+    update_dns: true
+    delete_vm_vars:
+      hostname: "{{ inventory_hostname }}"
+      delete_backing_file: false
+
+  pre_tasks:
+    - name: Warn if no limit (-l) specified
+      pause:
+        prompt: "WARNING: No -l specified. This will target the entire inventory. Press ENTER to continue or Ctrl+C to cancel."
+      when: ansible_limit is not defined
+
+  tasks:
+    - name: Destroy VMs on KVM host
+      delegate_to: "{{ kvmhost }}"
+      block:
+        - name: Include KVM role to delete VMs
+          include_role:
+            name: kvm
+            tasks_from: delete_vm
+          vars:
+            hostname: "{{ inventory_hostname }}"
+
+    - name: Include CoreDNS role to create or update DNS record
+      delegate_to: "{{ hostvars['ns01'].ansible_host }}"
+      block:
+        - name: Include the CoreDNS role for DNS record management
+          include_role:
+            name: coredns
+            tasks_from: delete
+          vars:
+            dns_zone: "{{ hostvars[inventory_hostname].dns_zone }}"
+            dns_record_name: "{{ inventory_hostname }}"
+            dns_record_ip: "{{ hostvars[inventory_hostname].ansible_host }}"
+          when: update_dns == true

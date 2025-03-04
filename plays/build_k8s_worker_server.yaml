@@ -1,0 +1,91 @@
+# description: Creates virtual machines on a KVM host.
+# usage: 
+#   - ansible-playbook create_vms.yaml -i inventory.yaml
+#   - ansible-playbook create_vms.yaml -i inventory.yaml -l <inventory_group>
+#
+# variables:
+#   - kubernetes_version
+#
+#
+
+- name: 
+  hosts: workers
+  become: yes
+  gather_facts: no
+  vars:
+    use_backing_file: true
+    kvmhost: "{{ hostvars['kvm01']['ansible_host'] }}"
+    join_cluster: true
+
+  tasks:
+    - name: Destroy VMs on KVM host
+      delegate_to: "{{ kvmhost }}"
+      block:
+        - name: Include KVM role to delete VMs
+          include_role:
+            name: kvm
+            tasks_from: delete_vm
+          vars:
+            hostname: "{{ inventory_hostname }}"
+            
+    - name: Build virtual machines
+      delegate_to: "{{ kvmhost }}"
+      block:
+        - name: Build virtual machines
+          include_role:
+            name: kvm
+            tasks_from: create_vm
+          vars:
+            hostname: "{{ inventory_hostname }}"
+          
+    - name: Create or update DNS record
+      delegate_to: "{{ hostvars['ns01'].ansible_host }}"
+      block:
+        - name: Include the CoreDNS role for DNS record management
+          include_role:
+            name: coredns
+            tasks_from: create_or_update
+          vars:
+            dns_zone: "{{ hostvars[inventory_hostname].dns_zone }}"
+            dns_record_name: "{{ inventory_hostname }}"
+            dns_record_ip: "{{ hostvars[inventory_hostname].ansible_host }}"
+
+    - name: Wait for VM's to start 
+      include_role:
+        name: kvm
+        tasks_from: wait_for_connection
+
+    - name: Install kubernetes packages
+      include_role:
+        name: kubernetes
+        tasks_from: install_kubernetes.yaml
+      # vars:
+      #   k8s_major: 1
+      #   k8s_minor: 30
+      #   k8s_patch: 9
+   
+    - name: Install and configure container runtime
+      include_role:
+        name: kubernetes
+        tasks_from: install_containerd
+      # vars:
+        # runc_version: "1.2.4"
+        # containerd_version: "1.7.25"
+
+    - name: 'Generate bootstrap token and join command'
+      delegate_to: "{{ groups['masters'][0] }}"
+      command: "kubeadm token create --description 'cluster build token' --ttl '30m' --print-join-command"
+      register: print_join_command
+      run_once: yes
+      
+    - name: 'Join workers to the cluster'
+      block:
+        - name: 'Join workers to the cluster'
+          include_role:
+            name: kubernetes
+            tasks_from: worker_join.yaml
+          vars:
+            bootstrap_command: "{{ print_join_command.stdout }}"
+            control_plane_server: "{{ groups['masters'][0] }}"
+      when: join_cluster == true
+

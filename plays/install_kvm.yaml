@@ -1,0 +1,20 @@
+# description: Install and configure KVM
+# 
+# usage: 
+#   - Update the hosts field target group or server from inventory
+#   - ansible-playbook install_kvm.yaml -i hosts.yaml -l kvm01
+#
+# prerequisites:
+#   - KMV role
+#   - Functioning ubuntu or debian server. 
+
+- name: Install KVM server
+  hosts: test01
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Include KVM role task
+      include_role:
+        name: kvm
+        tasks_from: install_kvm.yaml

@@ -1,0 +1,93 @@
+# description: Builds kubernetes control plane. Optionally, skip the kubeadm init if you need to manually handle the bootstrap.
+# usage: 
+#   - ansible-playbook create_vms.yaml -i inventory.yaml
+#   - ansible-playbook create_vms.yaml -i inventory.yaml -l <inventory_group>
+#
+# variables:
+#   - kubernetes_version
+#   - init_master
+#
+
+- name: 
+  hosts: masters
+  become: yes
+  gather_facts: no
+  vars:
+    use_backing_file: true
+    kvmhost: "{{ hostvars['kvm01']['ansible_host'] }}"
+    init_master: true
+
+  tasks:
+    - name: Debug init_configuration_api
+      debug:
+        var: init_configuration_api
+    
+    - name: Debug init_configuration_api
+      debug:
+        var: k8s_major
+        
+
+    - name: Destroy VMs on KVM host
+      delegate_to: "{{ kvmhost }}"
+      block:
+        - name: Include KVM role to delete VMs
+          include_role:
+            name: kvm
+            tasks_from: delete_vm
+          vars:
+            hostname: "{{ inventory_hostname }}"
+
+    - name: Build virtual machines
+      delegate_to: "{{ kvmhost }}"
+      block:
+        - name: Build virtual machines
+          include_role:
+            name: kvm
+            tasks_from: create_vm
+          vars:
+            hostname: "{{ inventory_hostname }}"
+
+    - name: Create or update DNS record
+      delegate_to: "{{ hostvars['ns01'].ansible_host }}"
+      block:
+        - name: Include the CoreDNS role for DNS record management
+          include_role:
+            name: coredns
+            tasks_from: create_or_update
+          vars:
+            dns_zone: "{{ hostvars[inventory_hostname].dns_zone }}"
+            dns_record_name: "{{ inventory_hostname }}"
+            dns_record_ip: "{{ hostvars[inventory_hostname].ansible_host }}"
+
+    - name: Wait for VM's to start 
+      include_role:
+        name: kvm
+        tasks_from: wait_for_connection
+
+    - name: Install kubernetes packages
+      include_role:
+        name: kubernetes
+        tasks_from: install_kubernetes.yaml
+      # vars:
+        # k8s_major: 1
+        # k8s_minor: 30
+        # k8s_patch: 9
+   
+    - name: Install and configure container runtime
+      include_role:
+        name: kubernetes
+        tasks_from: install_containerd
+      # vars:
+        # runc_version: "1.2.4"
+        # containerd_version: "1.7.25"
+
+    - name: Init Kubernetes master 
+      delegate_to: "{{ groups['masters'][0] }}" 
+      block:
+        - name: Init Kubernetes master
+          include_role:
+            name: kubernetes
+            tasks_from: master_init.yaml
+          vars:
+            kubeadm_config: "{{ playbook_dir }}/../templates/kubeadm-config.yaml.j2"
+      when: init_master == true

@@ -1,0 +1,5 @@
+- import_playbook: build_k8s_control_plane_server.yaml
+- import_playbook: build_k8s_worker_server.yaml
+- import_playbook: deploy_calico.yaml
+- import_playbook: deploy_nginx.yaml
+- import_playbook: install_kubectl_localhost.yaml

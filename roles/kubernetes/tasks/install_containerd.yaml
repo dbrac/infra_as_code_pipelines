@@ -1,0 +1,72 @@
+    # Installs and configures containerd and runc
+    #
+    # required variables
+    #   - containerd_version
+    #   - runc_version
+    #
+    
+  - name: Validate variables are set
+    assert:
+      that:
+        - containerd_version is defined
+        - runc_version is defined
+      fail_msg: "One or more required variables are not set"
+      success_msg: "Required variables are set"
+
+  - name: 'Download/unzip containerd'
+    unarchive:
+      src: https://github.com/containerd/containerd/releases/download/v{{ containerd_version }}/containerd-{{ containerd_version }}-linux-amd64.tar.gz
+      dest: /usr/
+      remote_src: yes
+      owner: root
+      group: root
+      mode: 0755
+
+  - name: 'Download runc'
+    get_url:
+      url: https://github.com/opencontainers/runc/releases/download/v{{ runc_version }}/runc.amd64
+      dest: /usr/sbin/runc
+      owner: root
+      group: root
+      mode: 0755
+
+  - name: 'Copy containerd.service'
+    copy:
+      src: '../files/containerd.service'
+      dest: '/lib/systemd/system/containerd.service'
+      owner: root
+      group: root
+      mode: 0644
+
+  - name: 'Load the overlay module'
+    shell: modprobe overlay
+
+  - name: 'Load the br_netfilter module'
+    shell: modprobe br_netfilter
+
+  - name: 'Create /etc/containerd/'
+    file:
+      path: '/etc/containerd/'
+      state: directory
+      owner: root
+      group: root
+      mode: 0755
+
+  - name: 'Generate a containerd config'
+    shell: containerd config default > /etc/containerd/config.toml
+
+  # containerd by default has the option of 'SystemdCgroup = false' which worked for Ubuntu 20.04 but does not work for Ubuntu 22.04 - set it to true
+  - name: "Edit config.toml setting 'SystemdCgroup = true' for Ubuntu 22.04"
+    replace:
+      path: '/etc/containerd/config.toml'
+      regexp:  'SystemdCgroup = false'
+      replace: 'SystemdCgroup = true'
+
+  - name: 'Enable containerd on startup'
+    command: 'systemctl enable containerd'
+
+  - name: 'Restart containerd to pick up changes'
+    systemd:
+      name: containerd
+      daemon_reload: yes
+      state: restarted

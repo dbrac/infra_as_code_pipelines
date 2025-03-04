@@ -1,0 +1,40 @@
+- name: 'install nginx ingress controller'
+  hosts: masters[0]
+  become: yes
+  vars:
+    nginx_version: 1.9.5
+  tasks:
+    - name: 'Download nginx'
+      get_url:
+        url: "https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v{{ nginx_version }}/deploy/static/provider/cloud/deploy.yaml"
+        dest: '~/nginx.yaml'
+        owner: root
+        group: root
+        mode: 0755
+
+    - name: 'Apply nginx yaml'
+      command: 'kubectl apply -f ~/nginx.yaml'
+
+    # can also just set the ingress class to default
+    - name: 'Patch nginx deployment for --watch-ingress-without-class flag'
+      command: kubectl -n ingress-nginx patch deployment ingress-nginx-controller -p '{"spec":{"template":{"spec":{"$setElementOrder/containers":[{"name":"controller"}],"containers":[{"args":["/nginx-ingress-controller","--election-id=ingress-controller-leader","--controller-class=k8s.io/ingress-nginx","--ingress-class=nginx","--configmap=$(POD_NAMESPACE)/ingress-nginx-controller","--validating-webhook=:8443","--validating-webhook-certificate=/usr/local/certificates/cert","--validating-webhook-key=/usr/local/certificates/key","--watch-ingress-without-class"],"name":"controller"}]}}}}'
+
+    - name: 'Patch nginx service node ports'
+      # Use 80 & 443 for ingress traffic rather than random nodeports.
+      # NAME                                 TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)                     AGE
+      # ingress-nginx-controller             NodePort    10.107.110.117   <none>        80:7534/TCP,443:30767/TCP   6s
+      command: kubectl -n ingress-nginx patch service ingress-nginx-controller -p '{"spec":{"ports":[{"nodePort":80,"port":80},{"nodePort":443,"port":443}],"type":"NodePort"}}'
+
+    # wait for nginx restart triggered by the deployment patch and then sleep so that the final ready check is only looking at the final pod, otherwise kubeclt wait will retrun non 0 exit
+    - name: Wait for nginx restart
+      shell: kubectl --namespace=ingress-nginx rollout status deploy/ingress-nginx-controller --timeout=120s
+
+    - name: Sleep
+      pause:
+        seconds: 30
+
+    - name: Wait for nginx pods to become ready
+      shell: kubectl wait --namespace=ingress-nginx --for=condition=Ready pods --selector="app.kubernetes.io/component=controller" --timeout=120s
+      register: nginx_pods_ready
+
+    - debug: var=nginx_pods_ready.stdout_lines

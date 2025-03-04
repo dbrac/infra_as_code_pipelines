@@ -1,0 +1,44 @@
+- name: 'cluster install calico'
+  hosts: masters[0]
+  become: yes
+  vars:
+    calico_version: 3.24.5
+  tasks:
+    - name: 'Download calico'
+      get_url:
+        url: "https://raw.githubusercontent.com/projectcalico/calico/v{{ calico_version }}/manifests/calico.yaml"
+        dest: '~/calico.yaml'
+        owner: root
+        group: root
+        mode: 0755
+
+    - name: 'Edit calico.yaml - remove comment'
+      replace: 
+        path: '~/calico.yaml'
+        regexp:  '# - name: CALICO_IPV4POOL_CIDR'
+        replace: '- name: CALICO_IPV4POOL_CIDR'
+
+    - name: 'Edit calico.yaml - remove comment & edit CIDR'
+      replace: 
+        path: '~/calico.yaml'
+        regexp:  '#   value: "192.168.0.0/16"'
+        replace: '  value: "10.244.0.0/16"'
+
+    - name: 'Apply Calico yaml'
+      command: 'kubectl apply -f ~/calico.yaml'
+
+    - name: Wait for all calico pods to be created
+      shell: kubectl get pod --namespace=kube-system --selector="k8s-app in (calico-kube-controllers,calico-node)" --output=jsonpath='{.items[*].metadata.name}'
+      register: calico_pods_created
+      until: item in calico_pods_created.stdout
+      retries: 60
+      delay: 10
+      with_items:
+        - calico-kube-controllers
+        - calico-node
+
+    - name: Wait for calico pods to become ready
+      shell: kubectl wait --namespace=kube-system --for=condition=Ready pods --selector="k8s-app in (calico-kube-controllers,calico-node)" --timeout=120s
+      register: calico_pods_ready
+
+    - debug: var=calico_pods_ready.stdout_lines

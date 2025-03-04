@@ -1,0 +1,15 @@
+k8s_major: 1
+k8s_minor: 30
+k8s_patch: 9
+runc_version: "1.2.4"
+containerd_version: "1.7.25"
+pod_cidr: "100.244.0.0/16"
+service_cidr: "100.96.0.0/12"
+kubelet_max_pods: 100
+audit_log_maxage: "31"
+audit_log_maxbackup: "7"
+audit_log_maxsize: "100"
+service_node_port_range: "80-32767"
+kubelet_configuration_api: "kubelet.config.k8s.io/v1beta1"
+cluster_configuration_api: "kubeadm.k8s.io/v1beta3"
+init_configuration_api: "kubeadm.k8s.io/v1beta3"

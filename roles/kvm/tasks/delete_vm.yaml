@@ -1,0 +1,45 @@
+# Deletes virtual machines from KVM server. If delete backing_file is true and if no other VM's use the backing file, we will 
+#
+# required variables:
+#   - hostname
+#
+# optional variables:
+#   - delete_backing_file
+
+- name: Ensure required variables are defined
+  assert:
+    that:
+      - hostname is defined
+    fail_msg: "One or more required variables are missing."
+
+- name: "Stop VM"
+  command: "virsh destroy {{ hostname }}"
+  ignore_errors: yes
+
+- name: "Delete VM definition"
+  command: "virsh undefine {{ hostname }}"
+  ignore_errors: yes
+
+- name: "Delete VM files"
+  file:
+    path: "{{ vm_path }}/{{ hostname }}"
+    state: absent
+
+- name: Check if any remaining VMs use the base image
+  shell: >
+    virsh list --all --name | xargs -I {} virsh dumpxml {} |
+    grep '/var/lib/libvirt/images/base/{{ cloud_image }}.img' | wc -l
+  register: base_image_vm_count
+  changed_when: false
+
+- name: Debug delete_backing_file
+  debug:
+    var: delete_backing_file
+
+- name: Delete base image if no VMs use it and deletion is enabled
+  file:
+    path: "/var/lib/libvirt/images/base/{{ cloud_image }}.img"
+    state: absent
+  when: 
+    - base_image_vm_count.stdout | int == 0
+    - delete_backing_file | bool

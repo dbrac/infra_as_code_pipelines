@@ -1,0 +1,34 @@
+# description: Delete DNS records on the coredns server
+#
+# required variables:
+#   - dns_zone
+#   - dns_record_name
+#   - dns_record_ip
+
+- name: Assert required variables are set
+  assert:
+    that:
+      - dns_zone is defined 
+      - dns_record_name is defined 
+    fail_msg: "One or more required variables are missing."
+
+- name: Check if the DNS record with the correct IP exists
+  command: grep -E "^{{ dns_record_name }}[[:space:]]+IN[[:space:]]+A[[:space:]]+{{ dns_record_ip }}$" {{ zone_file }}
+  register: dns_record_exists
+  ignore_errors: yes
+
+- name: Delete the DNS record if it exists
+  shell: "sed -i '/^{{ dns_record_name }}[[:space:]]\\+IN[[:space:]]\\+A[[:space:]]\\+{{ dns_record_ip }}$/d' {{ zone_file }}"
+  register: sed_result
+  changed_when: sed_result.rc == 0
+
+- name: Reload CoreDNS service
+  systemd:
+    name: coredns
+    state: restarted
+  when: dns_record_exists.rc == 0
+
+- name: Debug message if record was not found
+  debug:
+    msg: "DNS record {{ dns_record_name }} not found in {{ zone_file }}."
+  when: dns_record_exists.rc != 0

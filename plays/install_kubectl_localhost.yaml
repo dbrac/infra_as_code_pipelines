@@ -1,0 +1,44 @@
+- name: 'configure localhost'
+  hosts: localhost
+  become: no
+  gather_facts: yes
+  tasks:
+    - name: 'Create ~/.kube'
+      file:
+        path: '{{ ansible_user_dir }}/.kube'
+        state: directory
+        owner: "{{ ansible_user_id }}"
+        group: "{{ ansible_user_id }}"
+        mode: 0700
+
+    - name: Debug master node
+      debug:
+        var: groups['masters'][0]
+
+    - name: "Fetch kubeconfig from control plane"
+      become: yes
+      fetch:
+        src: "/etc/kubernetes/admin.conf"
+        dest: "{{ ansible_user_dir }}/.kube/config"
+        flat: yes
+      delegate_to: "{{ groups['masters'][0] }}"
+ 
+        
+    - name: 'Set permissions on ~/.kube/config'
+      file:
+        path: '{{ ansible_user_dir }}/.kube/config'
+        owner: "{{ ansible_user_id }}"
+        group: "{{ ansible_user_id }}"
+        mode: 0700
+
+    - name: 'Download kubectl'
+      become: yes
+      get_url:
+        url: https://dl.k8s.io/release/v{{ k8s_major }}.{{ k8s_minor }}.{{ k8s_patch }}/bin/linux/amd64/kubectl
+        dest: '/usr/local/bin'
+        owner: root
+        group: root
+        mode: 0755
+
+
+

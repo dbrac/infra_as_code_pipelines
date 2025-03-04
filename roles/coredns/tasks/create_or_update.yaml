@@ -1,0 +1,62 @@
+# description: Creates and updates DNS records on the coredns server
+#
+# variables:
+#   - dns_zone
+#   - dns_record_name
+#   - dns_record_ip
+
+- name: Validate variables are set
+  assert:
+    that:
+      - dns_zone is defined
+      - dns_record_name is defined
+      - dns_record_ip
+    fail_msg: "One or more required variables are not set"
+    success_msg: "Required variables are set"
+
+- name: Check if the DNS record already exists
+  command: grep "{{ dns_record_name }}" {{ zone_file }}
+  register: dns_record_exists
+  ignore_errors: true
+
+- name: Check if the IP is already assigned to another record
+  command: grep "{{ dns_record_ip }}" {{ zone_file }}
+  register: ip_in_use
+  ignore_errors: true
+
+- name: Fail if the IP is already assigned to a different record
+  fail:
+    msg: "The IP {{ dns_record_ip }} is already in use by another record in {{ zone_file }}. Please assign a unique IP."
+  when: ip_in_use.rc == 0 and dns_record_exists.rc != 0
+
+- name: Define DNS record template
+  set_fact:
+    dns_record_template: "{{ dns_record_name }} IN A {{ dns_record_ip }}"
+
+- name: Update existing DNS record if found
+  replace:
+    path: "{{ zone_file }}"
+    regexp: "^{{ dns_record_name }}\\s+.*$"
+    replace: "{{ dns_record_template }}"
+  when: dns_record_exists.rc == 0
+  register: dns_updated
+
+- name: Add new DNS record if it does not exist
+  lineinfile:
+    path: "{{ zone_file }}"
+    line: "{{ dns_record_template }}"
+    create: yes
+    state: present
+  when: dns_record_exists.rc != 0
+  register: dns_added
+
+- name: Reload CoreDNS service if DNS records changed
+  systemd:
+    name: coredns
+    state: restarted
+  when: dns_updated.changed or dns_added.changed
+
+- name: Skip reload if no changes were made
+  debug:
+    msg: "No changes made to {{ zone_file }}. DNS record for {{ dns_record_name }} already exists."
+  when: not (dns_updated.changed or dns_added.changed)

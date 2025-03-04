@@ -1,0 +1,51 @@
+# Join workers to cluster
+#
+# Required variables
+#   - bootstrap_command
+#   - control_plane_server
+#
+
+- name: Validate variables are set
+  assert:
+    that:
+      - bootstrap_command is defined
+      - control_plane_server is defined
+    fail_msg: "One or more required variables are not set"
+    success_msg: "Required variables are set"
+
+- name: 'Create ~/.kube'
+  file:
+    path: '~root/.kube'
+    state: directory
+    owner: root
+    group: root
+    mode: 0700
+
+- name: "Fetch kubeconfig from control plane"
+  fetch:
+    src: "/root/.kube/config"
+    dest: "../files/tmp/.kube/config"
+    flat: yes
+  delegate_to: "{{ control_plane_server }}"
+
+
+- name: "Copy kubeconfig to workers"
+  copy:
+    src: "../files/tmp/.kube/config"  
+    dest: "/root/.kube/config"  
+    owner: root
+    group: root
+    mode: 0600 
+
+- name: 'Set permissions on ~/.kube/config'
+  file:
+    path: '~root/.kube/config'
+    owner: root
+    group: root
+    mode: 0700
+
+- name: 'kubeadm join'
+  command: "/usr/bin/{{ bootstrap_command }}"
+
+- name: 'Label worker nodes'
+  command: "kubectl label node {{ inventory_hostname }} node-role.kubernetes.io/worker="

@@ -1,0 +1,92 @@
+# Installs kubernetes packages
+#
+# Required variables:
+#   - k8s_major
+#   - k8s_minor
+#   - k8s_patch
+#
+# Dependencies
+# - files/containerd.service
+# - files/99-kubernetes-cri.conf
+#
+
+- name: Validate variables are set
+  assert:
+    that:
+      - k8s_major is defined
+      - k8s_minor is defined
+      - k8s_patch is defined
+    fail_msg: "One or more required variables are not set"
+    success_msg: "Required variables are set"
+
+- name: 'download gpg key'
+  get_url:
+    url: 'https://pkgs.k8s.io/core:/stable:/v{{ k8s_major }}.{{ k8s_minor }}/deb/Release.key'
+    owner: root
+    mode: 0644
+    dest: "/tmp/k8s.io.key"
+
+- name: 'Dearmor GPG key'
+  shell: cat /tmp/k8s.io.key | sudo gpg --batch --yes --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+- name: 'add apt repo to sources.d'
+  copy:
+    dest: '/etc/apt/sources.list.d/kubernetes.list'
+    content: |
+      deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v{{ k8s_major }}.{{ k8s_minor }}/deb/ /
+
+- name: 'Apt-get update'
+  apt:
+    update_cache: yes
+
+  # Added because apt-get update kept failing
+  register: apt_update_cache
+  retries: 50
+  until: apt_update_cache is success or ('Failed to lock apt for exclusive operation' not in apt_update_cache.msg and 'Failed to update apt cache' not in apt_update_cache.msg)
+
+- name: "apt_update_cache.stdout"
+  debug:
+    msg: apt_update_cache.stdout
+
+- name: "apt_update_cache.msg"
+  debug:
+    msg: apt_update_cache.msg
+
+- name: 'Install Kubernetes packages'
+  apt:
+    state: present
+    install_recommends: no
+    update_cache: no
+    name:
+      - kubeadm={{ k8s_major }}.{{ k8s_minor }}.{{ k8s_patch }}-1.1
+      - kubelet={{ k8s_major }}.{{ k8s_minor }}.{{ k8s_patch }}-1.1
+      - kubectl={{ k8s_major }}.{{ k8s_minor }}.{{ k8s_patch }}-1.1
+  register: apt_install
+  retries: 50
+  until: apt_install is success or ('Could not get lock' not in apt_install.msg and 'Unable to acquire the dpkg frontend lock' not in apt_install.msg)
+
+- name: Mark hold kubeadm
+  dpkg_selections:
+    selection: hold
+    name: kubeadm
+
+- name: Mark hold kubelet
+  dpkg_selections:
+    selection: hold
+    name: kubelet
+
+- name: Mark hold kubectl
+  dpkg_selections:
+    selection: hold
+    name: kubectl
+
+- name: 'Copy 99-kubernetes-cri.conf'
+  copy:
+    src: '../files/99-kubernetes-cri.conf'
+    dest: '/etc/sysctl.d/99-kubernetes-cri.conf'
+    owner: root
+    group: root
+    mode: 0755
+
+- name: 'Reload --system'
+  shell: sysctl --system

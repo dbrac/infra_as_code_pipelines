@@ -1,0 +1,9 @@
+version: 2
+ethernets:
+  enp1s0:
+    dhcp4: {{ network_dhcp4 | lower }}
+    dhcp6: {{ network_dhcp6 | lower }}
+    addresses: [{{ hostvars[hostname]['ansible_host'] }}/{{ network_subnet_mask }}]
+    gateway4: {{ network_gateway }}
+    nameservers:
+      addresses: {{ network_nameservers }}

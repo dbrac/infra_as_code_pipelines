@@ -1,0 +1,23 @@
+# Kubernetes vars
+k8s_major: 1
+k8s_minor: 30
+k8s_patch: 9
+runc_version: "1.2.4"
+containerd_version: "1.7.25"
+api_vip: "192.168.1.202"
+pod_cidr: "100.244.0.0/16"
+service_cidr: "100.96.0.0/12"
+kubelet_max_pods: 100
+audit_log_maxage: "31"
+audit_log_maxbackup: "7"
+audit_log_maxsize: "100"
+service_node_port_range: "80-32767"
+kubelet_configuration_api: "kubelet.config.k8s.io/v1beta1"
+cluster_configuration_api: "kubeadm.k8s.io/v1beta3"
+init_configuration_api: "kubeadm.k8s.io/v1beta3"
+
+# Server build vars
+dns_zone: "dblab.org"
+ubuntu_user: darrin
+ssh_public_key: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDVyvgaKoaLfRQLV1+2/UUsuJSClgL/jwXfaB0Dyp12a+LODIBjoFQTE6Cg4rJh3mpDS4WLj8XdJiHMHQPjat6wbv9nS454vLDRAYF/L0yTrazE7XhckoebuKMvFKlp7b/+mZZzEX9xdlCMUdBDD4KuYMI7PjfWGzsN8jGnG9Lk+GRc+HXexfnnY90+fob+6g55nx6U4oiIRvFvbXCo0o4vwRHnxr/RurL08T2wKD8Vnhn2gneiz96i1sgfKGbhBjJwtNaYJSHqpzNE5/3IVVjrhSX3COfWXnMWaZ18ZWZJZF3S/gvtb2ETFvLjsGxjFGuHpTOSw9w+PG5K0CTW0P6Fk1c0Ph6eDboj1uhjIcEhoR8ToZMlkII/VqNE5yJQiX5BuuFuKcn+K2SNfAvmPimigOG1E6edWlA89+xzGqC77G1myakVbW8sXsnwOu/Dp13QJvOFTT78TT6n6tk6KCJOeG4rpLoPYGFmDJliLFILsYiCz+ywy9Hvz7AQsnt5Cqs=
+

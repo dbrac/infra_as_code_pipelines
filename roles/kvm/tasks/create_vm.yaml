@@ -1,0 +1,93 @@
+# Creates virtual machines on KVM server
+#
+# required variables:
+#   - hostname
+#
+# optional variables:
+#   - use_backing_file is defined
+#   - disk_size is defined
+#   - ram_size is defined
+#   - cpu_count is defined
+
+- name: Ensure required variables are defined
+  assert:
+    that:
+      - hostname is defined
+    fail_msg: "One or more required variables are missing."
+
+- name: Check if the VM already exists
+  shell: "virsh list --all | grep -w {{ hostname }}"
+  register: vm_check
+  ignore_errors: yes
+  changed_when: false
+
+- name: Print message and stop play if VM exists
+  debug:
+    msg: "VM {{ hostname }} already exists, ending the play."
+  when: vm_check.rc == 0
+
+- name: Stop play if VM exists
+  meta: end_play
+  when: vm_check.rc == 0
+
+- name: Check if Ubuntu image file exists
+  stat:
+    path: "{{ vm_path }}/base/{{ cloud_image }}.img"
+  register: file
+
+- name: Download Ubuntu cloud image
+  get_url:
+    url: "https://cloud-images.ubuntu.com/releases/jammy/release/{{ cloud_image }}.img"
+    dest: "{{ vm_path }}/base/{{ cloud_image }}.img"
+  when: not file.stat.exists
+
+- name: Create local directory for the VM image
+  file:
+    path: "{{ vm_path }}/{{ hostname }}"
+    state: directory
+
+- name: Distribute network-config.yml
+  template:
+    src: "templates/network-config.yml.j2"
+    dest: "{{ vm_path }}/{{ hostname }}/network-config.yml"
+
+- name: Distribute user-data.yml
+  template:
+    src: "templates/user-data.yml.j2"
+    dest: "{{ vm_path }}/{{ hostname }}/user-data.yml"
+
+- name: Generate cidata.iso
+  command: >
+    cloud-localds -v --network-config={{ vm_path }}/{{ hostname }}/network-config.yml
+    {{ vm_path }}/{{ hostname }}/{{ hostname }}-cidata.iso
+    {{ vm_path }}/{{ hostname }}/user-data.yml
+
+- name: Create instance disk image (backing file)
+  command: >
+    sudo qemu-img create -b {{ vm_path }}/base/{{ cloud_image }}.img -f qcow2 -F qcow2
+    {{ vm_path }}/{{ hostname }}/{{ hostname }}.qcow2
+  when: use_backing_file | bool
+  ignore_errors: true
+
+- name: Create full standalone instance disk image
+  command: >
+    sudo qemu-img convert -f qcow2 -O qcow2 {{ vm_path }}/base/{{ cloud_image }}.img
+    {{ vm_path }}/{{ hostname }}/{{ hostname }}.qcow2
+  when: not use_backing_file | bool
+  ignore_errors: true
+
+- name: Resize instance disk image
+  command: >
+    sudo qemu-img resize {{ vm_path }}/{{ hostname }}/{{ hostname }}.qcow2
+    {{ disk_size }}G
+  ignore_errors: true
+
+- name: Create VM instance
+  command: >
+    virt-install --name={{ hostname }} --ram={{ ram_size }}
+    --vcpus={{ cpu_count }} --import
+    --disk path={{ vm_path }}/{{ hostname }}/{{ hostname }}.qcow2,format=qcow2
+    --disk path={{ vm_path }}/{{ hostname }}/{{ hostname }}-cidata.iso,device=cdrom
+    --os-variant=ubuntu22.04 --network bridge=br0,model=virtio --noautoconsole
+
+      

@@ -1,0 +1,117 @@
+# Intialize the kubernetes control plane server. Optionally pass in a kubeadm.conf file.
+#
+# Required variables
+#   - none
+
+- name: 'Distribute kubeadm-config.yaml'
+  template:
+    src: "{{ kubeadm_config }}"
+    dest: '~/kubeadm-config.yaml'
+  when: kubeadm_config is defined
+
+# NOTE: --upload-certs is only used when joining multiple masters, but doesn't hurt anything for single master
+# NOTE: Need to review upload config (https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-init-phase/#cmd-phase-upload-config)?
+- name: 'kubeadm init (may take a few minutes to pull containers)'
+  command: 'kubeadm init --upload-certs'
+  when: kubeadm_config is not defined
+
+- name: 'kubeadm init (may take a few minutes to pull containers)'
+  command: 'kubeadm init --config ~/kubeadm-config.yaml --upload-certs'
+  when: kubeadm_config is defined
+
+- name: 'Create ~/.kube'
+  file:
+    path: '~root/.kube'
+    state: directory
+    owner: root
+    group: root
+    mode: 0700
+
+- name: 'Copy ~/.kube/config'
+  copy:
+    src: "/etc/kubernetes/admin.conf"
+    dest: '~root/.kube/config'
+    remote_src: yes
+
+- name: 'Set permissions on ~/.kube/config'
+  file:
+    path: '~root/.kube/config'
+    owner: root
+    group: root
+    mode: 0700
+
+- name: Wait for all control-plane pods to be created
+  shell: "kubectl get pod --namespace=kube-system --selector tier=control-plane --output=jsonpath='{.items[*].metadata.name}'"
+  register: control_plane_pods_created
+  until: item in control_plane_pods_created.stdout
+  retries: 10
+  delay: 30
+  with_items:
+    - etcd
+    - kube-apiserver
+    - kube-controller-manager
+    - kube-scheduler
+
+- name: Wait for control-plane pods to become ready
+  shell: "kubectl wait --namespace=kube-system --for=condition=Ready pods --selector tier=control-plane --timeout=600s"
+  register: control_plane_pods_ready
+
+- debug: var=control_plane_pods_ready.stdout_lines
+
+# Generate certificate key for kube-system/kubeadm-certs secret. Even though
+# a certificate key is generated during kubeadm init, it is not easily obtained
+# to pass in the join command so new key is generated and uploaded.
+- name: 'Generate certificate key'
+  command: 'kubeadm certs certificate-key'
+  register: cert_key
+
+# Upload newly generated certificate key to kube-system/kubeadm-certs secret.
+- name: 'Upload generated certificate key'
+  command: "kubeadm init phase upload-certs --upload-certs --certificate-key {{ cert_key.stdout }}"
+
+- name: 'Generate bootstrap token and join command'
+  command: "kubeadm token create --description 'cluster build token' --ttl '30m' --print-join-command"
+  register: bootstrap_command
+  run_once: yes
+  changed_when: False
+
+- debug:
+    msg: "{{ bootstrap_command.stdout }}"
+
+- name: "Delete old join command files"
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - ../files/tmp/join_worker.txt
+    - ../files/tmp/join_controlplane.txt
+
+- name: Gather facts for localhost
+  delegate_to: 127.0.0.1
+  setup:
+
+- name: "Worker join command"
+  delegate_to: 127.0.0.1
+  copy:
+    owner: "{{ ansible_user_id }}"
+    group: "{{ ansible_user_id }}"
+    mode: 0744
+    dest: "{{ role_path }}/files/tmp/join_worker.txt"
+    content: |
+      {{ bootstrap_command.stdout }}
+
+- name: "Control plane join command"
+  delegate_to: 127.0.0.1
+  copy:
+    owner: "{{ ansible_user_id }}"
+    group: "{{ ansible_user_id }}"
+    mode: 0744
+    dest: "{{ role_path }}/files/tmp/join_controlplane.txt"
+    content: |
+      {{ bootstrap_command.stdout }}" --control-plane --certificate-key "{{ cert_key.stdout }}
+
+- name: 'Retrieve ~/.kube/config'
+  fetch:
+    flat: true
+    src: "/etc/kubernetes/admin.conf"
+    dest: "{{ role_path }}/files/tmp/admin.conf"

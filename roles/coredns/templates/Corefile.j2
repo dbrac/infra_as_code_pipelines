@@ -1,0 +1,9 @@
+.:53 {
+  forward . {{ coredns_forwarders | join(' ') }}
+  log
+  errors
+}
+
+{{ dns_zone }}:53 {
+  file /etc/coredns/zones/{{ dns_zone }}.zone
+}

@@ -1,0 +1,39 @@
+###############################
+## Master init configuration ##
+###############################
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: InitConfiguration
+# set crictl socket here
+---
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: ClusterConfiguration
+
+kubernetesVersion: v{{ kubernetes_version }}
+controlPlaneEndpoint: {{ apiserver }}:6443
+
+apiServer:
+  timeoutForControlPlane: 3m0s
+  extraArgs:
+    audit-log-maxage: "31"
+    audit-log-maxbackup: "7"
+    audit-log-maxsize: "101"
+    enable-admission-plugins: AlwaysPullImages
+    service-node-port-range: "80-32767"  # Expands NodePort range to allow port 80
+
+controllerManager:
+  extraArgs:
+    bind-address: 0.0.0.0
+    profiling: "false"
+
+networking:
+  podSubnet: {{ pod_cidr }}
+
+scheduler:
+  extraArgs:
+    bind-address: 0.0.0.0
+    profiling: "false"
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+maxPods: 100
+-

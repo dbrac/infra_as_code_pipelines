@@ -1,0 +1,43 @@
+# Installs and configures the KVM server.
+# required variables:
+#   - None
+- name: "Install cpu-checker if it's not already installed"
+  debug:
+    msg: "Installing cpu-checker"
+    
+- name: "Install cpu-checker if it's not already installed"
+  apt:
+    name: "cpu-checker"
+    state: present
+    install_recommends: no
+
+- name: "Check if CPU virtualization extensions are enabled"
+  shell: "kvm-ok | tail -n 1"
+  register: kvmok
+
+- name: "Show KVM status"
+  debug:
+    msg: "{{ kvmok.stdout }}"
+
+- name: "Fail if CPU virtualization extensions are not enabled"
+  fail:
+    msg: "Failed: CPU virtualization extensions are not enabled"
+  when: kvmok.stdout != "KVM acceleration can be used"
+
+- name: "Install required KVM packages"
+  apt:
+    name: "{{ kvm_packages }}"
+    state: present
+    install_recommends: no
+
+- name: "Create necessary directories"
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: libvirt-qemu
+    mode: '0750'
+  loop:
+    - "{{ vm_path }}"
+    - "{{ base_image_path }}"
+

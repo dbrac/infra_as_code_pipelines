@@ -1,0 +1,108 @@
+# Description: Installs and configures CoreDNS server. 
+#
+# required variables:
+#   - dns_zone 
+
+
+- name: Assert required variables are set
+  assert:
+    that:
+      - dns_zone is defined 
+    fail_msg: "One or more required variables are missing."
+
+- name: Assert required variables are set
+  assert:
+    that:
+      - dns_zone is defined 
+      - dns_record_name is defined 
+    fail_msg: "One or more required variables are missing: dns_zone, dns_record_name, zone_file"
+
+- name: Install necessary dependencies
+  apt:
+    name:
+      - curl
+      - sudo
+    state: present
+    update_cache: yes
+
+- name: Download CoreDNS binary (tarball)
+  get_url:
+    url: "{{ coredns_binary_url }}"
+    dest: "/usr/local/bin/coredns.tgz"
+    mode: '0644'
+
+- name: Extract CoreDNS binary
+  unarchive:
+    src: "/usr/local/bin/coredns.tgz"
+    dest: "/usr/local/bin/"
+    remote_src: yes
+    creates: "/usr/local/bin/coredns"
+
+- name: Make CoreDNS executable
+  file:
+    path: "/usr/local/bin/coredns"
+    mode: '0755'
+
+- name: Create CoreDNS configuration directory
+  file:
+    path: "/etc/coredns/zones"
+    state: directory
+
+- name: Create CoreDNS configuration file
+  template:
+    src: "templates/Corefile.j2"
+    dest: "/etc/coredns/Corefile"
+    mode: '0644'
+
+- name: Copy CoreDNS zone file
+  template:
+    src: "templates/dns-zone-file.j2"
+    dest: "/etc/coredns/zones/{{ dns_zone }}.zone"
+    mode: '0644'
+
+- name: Stop and disable systemd-resolved service
+  systemd:
+    name: systemd-resolved
+    state: stopped
+    enabled: no
+  ignore_errors: yes
+
+- name: Remove the systemd-resolved symlink
+  command: rm -f /etc/resolv.conf
+  ignore_errors: yes
+
+- name: Create a new resolv.conf file
+  copy:
+    dest: /etc/resolv.conf
+    content: |
+      nameserver 127.0.0.1
+      search {{ dns_zone }}
+    mode: '0644'
+
+- name: Set up CoreDNS as a systemd service
+  copy:
+    dest: "/etc/systemd/system/coredns.service"
+    content: |
+      [Unit]
+      Description=CoreDNS
+      Documentation=https://coredns.io
+      After=network.target
+
+      [Service]
+      ExecStart=/usr/local/bin/coredns -conf /etc/coredns/Corefile
+      Restart=always
+      LimitNOFILE=4096
+
+      [Install]
+      WantedBy=multi-user.target
+    mode: '0644'
+
+- name: Reload systemd to apply new service
+  systemd:
+    daemon_reload: yes
+
+- name: Enable and start CoreDNS service
+  systemd:
+    name: coredns
+    state: started
+    enabled: yes
